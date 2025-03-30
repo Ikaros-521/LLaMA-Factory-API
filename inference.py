@@ -7,13 +7,30 @@ from loguru import logger
 
 @dataclass
 class GenerationConfig:
+    """
+    生成配置类，用于控制文本生成的参数
+    
+    参数:
+        max_length: 生成文本的最大长度
+        top_p: 用于核采样的概率阈值
+        temperature: 生成多样性控制，较高的值会增加随机性
+        repetition_penalty: 重复惩罚因子，大于1时会降低重复单词的可能性
+    """
     max_length: int = 32768
     top_p: float = 0.9
     temperature: float = 0.7
     repetition_penalty: float = 1.0
 
 def format_messages(messages: List[Dict[str, str]]) -> str:
-    """将消息列表格式化为Qwen2模型需要的格式"""
+    """
+    将消息列表格式化为Qwen2模型需要的格式
+    
+    参数:
+        messages: 消息列表，每个消息包含role和content字段
+        
+    返回:
+        格式化后的文本字符串
+    """
     formatted_text = ""
     for message in messages:
         role = message["role"]
@@ -26,7 +43,11 @@ def format_messages(messages: List[Dict[str, str]]) -> str:
     return formatted_text
 
 class ModelInference:
+    """
+    模型推理类，负责加载模型、管理和执行推理
+    """
     def __init__(self):
+        """初始化推理类，设置基本属性"""
         self.model = None
         self.tokenizer = None
         self.loaded = False
@@ -39,6 +60,18 @@ class ModelInference:
         infer_dtype: str = "auto",
         use_vllm: bool = False
     ) -> str:
+        """
+        加载语言模型和分词器
+        
+        参数:
+            base_model: 基础模型路径或名称
+            adapter_path: LoRA适配器路径，如果不使用可设为None
+            infer_dtype: 推理数据类型，可以是'auto'、'float16'、'bfloat16'或'float32'
+            use_vllm: 是否使用vLLM后端来加速推理
+            
+        返回:
+            加载状态信息字符串
+        """
         try:
             # 检查并安装必要的依赖
             if not use_vllm:  # 使用HuggingFace后端
@@ -108,6 +141,12 @@ class ModelInference:
             return f"模型加载失败：{str(e)}"
     
     def unload_model(self) -> str:
+        """
+        卸载模型并释放GPU内存
+        
+        返回:
+            卸载状态信息字符串
+        """
         if not self.loaded:
             return "模型尚未加载"
         
@@ -128,6 +167,17 @@ class ModelInference:
         history: Optional[List[Dict[str, str]]] = None,
         stream: bool = False
     ) -> str:
+        """
+        执行对话推理
+        
+        参数:
+            query: 用户输入的查询文本
+            history: 对话历史，格式为包含role和content字段的字典列表
+            stream: 是否使用流式输出（当前实现中未使用）
+            
+        返回:
+            模型生成的回复文本
+        """
         if not self.loaded:
             return "请先加载模型"
         
@@ -158,13 +208,31 @@ class ModelInference:
             return f"生成回复时发生错误：{str(e)}"
 
 def main():
+    """
+    主函数，用于命令行交互式推理
+    在这里可以方便地修改模型和LoRA权重路径
+    """
+    # 模型配置 - 可以在此处修改
+    # -------------------------------------
+    # 基础模型路径或Hugging Face模型ID
+    BASE_MODEL = "Qwen/Qwen2-1.5B-Instruct"  
+    # LoRA模型路径，如不使用设为None
+    LORA_PATH = "saves/Qwen2-1.5B-Chat/lora/train_2024-07-09-15-38-00"  
+    # 推理精度，可选: "auto", "float16", "bfloat16", "float32"
+    INFER_DTYPE = "auto"  
+    # 是否使用vLLM后端进行加速
+    USE_VLLM = False
+    # -------------------------------------
+    
     inference = ModelInference()
     
     logger.info("正在加载模型...")
-    # 可以选择使用vllm后端和不同的数据类型
+    # 使用上方定义的模型参数加载模型
     result = inference.load_model(
-        infer_dtype="auto",  # 可选: "auto", "float16", "bfloat16", "float32"
-        use_vllm=False  # 是否使用vllm后端
+        base_model=BASE_MODEL,
+        adapter_path=LORA_PATH,
+        infer_dtype=INFER_DTYPE,
+        use_vllm=USE_VLLM
     )
     logger.info(result)
     
@@ -179,7 +247,12 @@ def main():
             elif query.lower() == 'reload':
                 logger.info(inference.unload_model())
                 logger.info("重新加载模型...")
-                logger.info(inference.load_model())
+                logger.info(inference.load_model(
+                    base_model=BASE_MODEL,
+                    adapter_path=LORA_PATH,
+                    infer_dtype=INFER_DTYPE,
+                    use_vllm=USE_VLLM
+                ))
                 continue
             elif query.lower() == 'clear':
                 history = []
